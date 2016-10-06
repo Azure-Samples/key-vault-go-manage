@@ -1,0 +1,11 @@
+package: key-vault-go-manage
+import:
+- package: github.com/Azure/azure-sdk-for-go
+  version: v5.0.0-beta
+  subpackages:
+  - arm/keyvault
+  - arm/resources/resources
+- package: github.com/Azure/go-autorest
+  version: v7.2.1
+  subpackages:
+  - autorest/azure
