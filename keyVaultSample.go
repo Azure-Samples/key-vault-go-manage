@@ -88,10 +88,7 @@ func keyVaultOperations() error {
 
 	fmt.Println("List all Key Vaults in subscription...")
 	vaultsClient.APIVersion = "2015-11-01"
-	// This weird usage of the SDK is caused by a bug in AutoRest
-	// If APIVersion is not changed, I get this error...
-	// keyvault.VaultsClient#List: Failure responding to request: StatusCode=400 -- Original Error: autorest/azure: Service returned an error. Status=400 Code="InvalidApiVersionParameter" Message="The api-version '2015-06-01' is invalid. The supported versions are '2016-09-01,2016-07-01,2016-06-01,2016-02-01,2015-11-01,2015-01-01,2014-04-01-preview,2014-04-01,2014-01-01,2013-03-01,2014-02-26,2014-04'."
-	// "resourceType eq 'Microsoft.KeyVault/vaults'" must be added as filter so List wont include other resources
+	// This weird usage of the SDK is caused by this issue https://github.com/Azure/azure-sdk-for-go/issues/403
 	sList, err := vaultsClient.List("resourceType eq 'Microsoft.KeyVault/vaults'", nil)
 	if err != nil {
 		return err
@@ -159,7 +156,7 @@ func getToken(credentials map[string]string) (*azure.ServicePrincipalToken, erro
 	return token, nil
 }
 
-// printKeyVault prints basic info about a Key Vault
+// printKeyVault prints basic info about a Key Vault.
 func printKeyVault(vault keyvault.Vault) {
 	tags := "\n"
 	if vault.Tags == nil || len(*vault.Tags) <= 0 {
