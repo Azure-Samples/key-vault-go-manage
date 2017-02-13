@@ -34,8 +34,9 @@ var (
 	tenantID string
 	clientID string
 
-	groupClient  resources.GroupsClient
-	vaultsClient keyvault.VaultsClient
+	groupClient    resources.GroupsClient
+	vaultsClient   keyvault.VaultsClient
+	resourceClient resources.Client
 )
 
 func init() {
@@ -149,10 +150,8 @@ func main() {
 	printKeyVault(vault2)
 
 	fmt.Println("List all Key Vaults in subscription")
-	vaultsClient.APIVersion = "2015-11-01"
-	// This weird usage of the SDK is caused by this issue https://github.com/Azure/azure-sdk-for-go/issues/403
-	sList, err := vaultsClient.List("resourceType eq 'Microsoft.KeyVault/vaults'", nil)
-	vaultsClient.APIVersion = keyvault.APIVersion //Get APIVersion back to default
+
+	sList, err := resourceClient.List("resourceType eq 'Microsoft.KeyVault/vaults'", "", nil)
 	onErrorFail(err, "List failed")
 	for _, kv := range *sList.Value {
 		fmt.Printf("\t%s\n", *kv.Name)
@@ -233,6 +232,9 @@ func getEnvVarOrExit(varName string) string {
 func createClients() {
 	groupClient = resources.NewGroupsClient(subscriptionID)
 	groupClient.Authorizer = spToken
+
+	resourceClient = resources.NewClient(subscriptionID)
+	resourceClient.Authorizer = spToken
 
 	vaultsClient = keyvault.NewVaultsClient(subscriptionID)
 	vaultsClient.Authorizer = spToken
