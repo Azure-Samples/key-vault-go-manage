@@ -6,8 +6,10 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/arm/keyvault"
 	"github.com/Azure/azure-sdk-for-go/arm/resources/resources"
+	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/Azure/go-autorest/autorest/to"
+	"github.com/Azure/go-autorest/autorest/utils"
 	"github.com/satori/uuid"
 )
 
@@ -29,34 +31,26 @@ const (
 
 var (
 	subscriptionID string
-	spToken        *azure.ServicePrincipalToken
-
-	tenantID string
-	clientID string
-
+	tenantID       string
+	clientID       string
 	groupClient    resources.GroupsClient
 	vaultsClient   keyvault.VaultsClient
-	resourceClient resources.Client
+	resourceClient resources.GroupClient
 )
 
 func init() {
-	subscriptionID = getEnvVarOrExit("AZURE_SUBSCRIPTION_ID")
-	tenantID = getEnvVarOrExit("AZURE_TENANT_ID")
+	authorizer, err := utils.GetAuthorizer(azure.PublicCloud)
+	onErrorFail(err, "GetAuthorizer failed")
 
-	oauthConfig, err := azure.PublicCloud.OAuthConfigForTenant(tenantID)
-	onErrorFail(err, "OAuthConfigForTenant failed")
-
-	clientID = getEnvVarOrExit("AZURE_CLIENT_ID")
-	clientSecret := getEnvVarOrExit("AZURE_CLIENT_SECRET")
-	spToken, err = azure.NewServicePrincipalToken(*oauthConfig, clientID, clientSecret, azure.PublicCloud.ResourceManagerEndpoint)
-	onErrorFail(err, "NewServicePrincipalToken failed")
-
-	createClients()
+	subscriptionID = utils.GetEnvVarOrExit("AZURE_SUBSCRIPTION_ID")
+	tenantID = utils.GetEnvVarOrExit("AZURE_TENANT_ID")
+	clientID = utils.GetEnvVarOrExit("AZURE_CLIENT_ID")
+	createClients(subscriptionID, authorizer)
 }
 
 func main() {
 	fmt.Println("Creating resource group")
-	resourceGroupParameters := resources.ResourceGroup{
+	resourceGroupParameters := resources.Group{
 		Location: to.StringPtr(westus),
 	}
 	_, err := groupClient.CreateOrUpdate(groupName, resourceGroupParameters)
@@ -90,7 +84,7 @@ func main() {
 	onErrorFail(err, "Creating a UUID FromString for client ID failed")
 	keyVaultParameters.Properties.TenantID = &clientIDuuid
 	policy := keyvault.AccessPolicyEntry{
-		ObjectID: &clientIDuuid,
+		ObjectID: &clientID,
 		TenantID: &clientIDuuid,
 		Permissions: &keyvault.Permissions{
 			Keys: &[]keyvault.KeyPermissions{
@@ -130,7 +124,7 @@ func main() {
 			},
 			AccessPolicies: &[]keyvault.AccessPolicyEntry{
 				{
-					ObjectID: &clientIDuuid,
+					ObjectID: &clientID,
 					TenantID: &clientIDuuid,
 					Permissions: &keyvault.Permissions{
 						Keys: &[]keyvault.KeyPermissions{
@@ -176,8 +170,8 @@ func main() {
 	onErrorFail(err, fmt.Sprintf("Delete '%s' failed", vaultName2))
 
 	fmt.Println("Deleting resource group")
-	_, err = groupClient.Delete(groupName, nil)
-	onErrorFail(err, "Delete failed")
+	_, errChan := groupClient.Delete(groupName, nil)
+	onErrorFail(<-errChan, "Delete failed")
 }
 
 // printKeyVault prints basic info about a Key Vault.
@@ -218,26 +212,20 @@ func printKeyVault(vault keyvault.Vault) {
 	}
 }
 
-// getEnvVarOrExit returns the value of specified environment variable or terminates if it's not defined.
-func getEnvVarOrExit(varName string) string {
-	value := os.Getenv(varName)
-	if value == "" {
-		fmt.Printf("Missing environment variable %s\n", varName)
-		os.Exit(1)
-	}
+func createClients(subscriptionID string, authorizer *autorest.BearerAuthorizer) {
+	sampleUA := fmt.Sprintf("sample/0008/%s", utils.GetCommit())
 
-	return value
-}
-
-func createClients() {
 	groupClient = resources.NewGroupsClient(subscriptionID)
-	groupClient.Authorizer = spToken
+	groupClient.Authorizer = authorizer
+	groupClient.Client.AddToUserAgent(sampleUA)
 
-	resourceClient = resources.NewClient(subscriptionID)
-	resourceClient.Authorizer = spToken
+	resourceClient = resources.NewGroupClient(subscriptionID)
+	resourceClient.Authorizer = authorizer
+	resourceClient.Client.AddToUserAgent(sampleUA)
 
 	vaultsClient = keyvault.NewVaultsClient(subscriptionID)
-	vaultsClient.Authorizer = spToken
+	vaultsClient.Authorizer = authorizer
+	vaultsClient.Client.AddToUserAgent(sampleUA)
 }
 
 // onErrorFail prints a failure message and exits the program if err is not nil.
