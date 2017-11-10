@@ -4,19 +4,26 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/marstr/randname"
+
 	"github.com/Azure/azure-sdk-for-go/arm/keyvault"
 	"github.com/Azure/azure-sdk-for-go/arm/resources/resources"
+	"github.com/Azure/go-autorest/autorest"
+	"github.com/Azure/go-autorest/autorest/adal"
 	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/satori/go.uuid"
 )
 
 const (
-	groupName  = "your-azure-sample-group"
-	vaultName1 = "golangvault"
-	vaultName2 = "golangvault2"
-	westus     = "westus"
-	eastus     = "eastus"
+	westus = "westus"
+	eastus = "eastus"
+)
+
+var (
+	groupName  = "resourceGroup-" + randname.AdjNoun{}.Generate()
+	vaultName1 = "kv-" + randname.AdjNoun{}.Generate()
+	vaultName2 = "kv-" + randname.AdjNoun{}.Generate()
 )
 
 // This example requires that the following environment vars are set:
@@ -29,26 +36,26 @@ const (
 
 var (
 	subscriptionID string
-	spToken        *azure.ServicePrincipalToken
+	spToken        *adal.ServicePrincipalToken
 
 	tenantID string
 	clientID string
 
 	groupClient    resources.GroupsClient
 	vaultsClient   keyvault.VaultsClient
-	resourceClient resources.Client
+	resourceClient resources.GroupsClient
 )
 
 func init() {
 	subscriptionID = getEnvVarOrExit("AZURE_SUBSCRIPTION_ID")
 	tenantID = getEnvVarOrExit("AZURE_TENANT_ID")
 
-	oauthConfig, err := azure.PublicCloud.OAuthConfigForTenant(tenantID)
+	oauthConfig, err := adal.NewOAuthConfig(azure.PublicCloud.ActiveDirectoryEndpoint, tenantID)
 	onErrorFail(err, "OAuthConfigForTenant failed")
 
 	clientID = getEnvVarOrExit("AZURE_CLIENT_ID")
 	clientSecret := getEnvVarOrExit("AZURE_CLIENT_SECRET")
-	spToken, err = azure.NewServicePrincipalToken(*oauthConfig, clientID, clientSecret, azure.PublicCloud.ResourceManagerEndpoint)
+	spToken, err = adal.NewServicePrincipalToken(*oauthConfig, clientID, clientSecret, azure.PublicCloud.ResourceManagerEndpoint)
 	onErrorFail(err, "NewServicePrincipalToken failed")
 
 	createClients()
@@ -56,7 +63,7 @@ func init() {
 
 func main() {
 	fmt.Println("Creating resource group")
-	resourceGroupParameters := resources.ResourceGroup{
+	resourceGroupParameters := resources.Group{
 		Location: to.StringPtr(westus),
 	}
 	_, err := groupClient.CreateOrUpdate(groupName, resourceGroupParameters)
@@ -90,11 +97,13 @@ func main() {
 	onErrorFail(err, "Creating a UUID FromString for client ID failed")
 	keyVaultParameters.Properties.TenantID = &clientIDuuid
 	policy := keyvault.AccessPolicyEntry{
-		ObjectID: &clientIDuuid,
+		ObjectID: &clientID,
 		TenantID: &clientIDuuid,
 		Permissions: &keyvault.Permissions{
 			Keys: &[]keyvault.KeyPermissions{
-				keyvault.KeyPermissionsAll,
+				keyvault.KeyPermissionsGet,
+				keyvault.KeyPermissionsList,
+				keyvault.KeyPermissionsCreate,
 			},
 			Secrets: &[]keyvault.SecretPermissions{
 				keyvault.SecretPermissionsGet,
@@ -113,7 +122,9 @@ func main() {
 	keyVaultParameters.Properties.EnabledForDeployment = to.BoolPtr(true)
 	keyVaultParameters.Properties.EnabledForTemplateDeployment = to.BoolPtr(true)
 	(*keyVaultParameters.Properties.AccessPolicies)[0].Permissions.Secrets = &[]keyvault.SecretPermissions{
-		keyvault.SecretPermissionsAll,
+		keyvault.SecretPermissionsGet,
+		keyvault.SecretPermissionsSet,
+		keyvault.SecretPermissionsList,
 	}
 	vault, err = vaultsClient.CreateOrUpdate(groupName, vaultName1, keyVaultParameters)
 	onErrorFail(err, "CreateOrUpdate failed")
@@ -130,7 +141,7 @@ func main() {
 			},
 			AccessPolicies: &[]keyvault.AccessPolicyEntry{
 				{
-					ObjectID: &clientIDuuid,
+					ObjectID: &clientID,
 					TenantID: &clientIDuuid,
 					Permissions: &keyvault.Permissions{
 						Keys: &[]keyvault.KeyPermissions{
@@ -151,7 +162,7 @@ func main() {
 
 	fmt.Println("List all Key Vaults in subscription")
 
-	sList, err := resourceClient.List("resourceType eq 'Microsoft.KeyVault/vaults'", "", nil)
+	sList, err := vaultsClient.List("resourceType eq 'Microsoft.KeyVault/vaults'", nil)
 	onErrorFail(err, "List failed")
 	for _, kv := range *sList.Value {
 		fmt.Printf("\t%s\n", *kv.Name)
@@ -176,8 +187,8 @@ func main() {
 	onErrorFail(err, fmt.Sprintf("Delete '%s' failed", vaultName2))
 
 	fmt.Println("Deleting resource group")
-	_, err = groupClient.Delete(groupName, nil)
-	onErrorFail(err, "Delete failed")
+	_, errChan := groupClient.Delete(groupName, nil)
+	onErrorFail(<-errChan, "Delete failed")
 }
 
 // printKeyVault prints basic info about a Key Vault.
@@ -231,13 +242,13 @@ func getEnvVarOrExit(varName string) string {
 
 func createClients() {
 	groupClient = resources.NewGroupsClient(subscriptionID)
-	groupClient.Authorizer = spToken
+	groupClient.Authorizer = autorest.NewBearerAuthorizer(spToken)
 
-	resourceClient = resources.NewClient(subscriptionID)
-	resourceClient.Authorizer = spToken
+	resourceClient = resources.NewGroupsClient(subscriptionID)
+	resourceClient.Authorizer = autorest.NewBearerAuthorizer(spToken)
 
 	vaultsClient = keyvault.NewVaultsClient(subscriptionID)
-	vaultsClient.Authorizer = spToken
+	vaultsClient.Authorizer = autorest.NewBearerAuthorizer(spToken)
 }
 
 // onErrorFail prints a failure message and exits the program if err is not nil.
