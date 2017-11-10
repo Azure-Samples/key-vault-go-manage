@@ -1,13 +1,17 @@
-hash: 3655b2bf358a1df9c11a0b28c60bd3f9293d85bf5b143fd6b7aa0c6691d5df66
-updated: 2017-11-10T10:10:53.1870828-08:00
+hash: 88aef65bb78078e85713b2a869a3af6281fa67ecf133c27d8e65ada52be8cd1f
+updated: 2017-11-10T10:23:12.0875459-08:00
 imports:
 - name: github.com/Azure/azure-sdk-for-go
-  version: 509eea43b93cec2f3f17acbe2578ef58703923f8
+  version: 7692b0cef22674113fcf71cc17ac3ccc1a7fef48
   subpackages:
   - arm/keyvault
   - arm/resources/resources
+  - profiles/latest/keyvault/mgmt/keyvault
+  - profiles/latest/resources/mgmt/resources
+  - services/keyvault/mgmt/2016-10-01/keyvault
+  - services/resources/mgmt/2017-05-10/resources
 - name: github.com/Azure/go-autorest
-  version: f6be1abbb5abd0517522f850dd785990d373da7e
+  version: ab5671379918d9af294b6f0e3d8aaa98c829416d
   subpackages:
   - autorest/azure
   - autorest

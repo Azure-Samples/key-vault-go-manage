@@ -4,14 +4,13 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/marstr/randname"
-
-	"github.com/Azure/azure-sdk-for-go/arm/keyvault"
-	"github.com/Azure/azure-sdk-for-go/arm/resources/resources"
+	"github.com/Azure/azure-sdk-for-go/services/keyvault/mgmt/2016-10-01/keyvault"
+	"github.com/Azure/azure-sdk-for-go/services/resources/mgmt/2017-05-10/resources"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/adal"
 	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/Azure/go-autorest/autorest/to"
+	"github.com/marstr/randname"
 	"github.com/satori/go.uuid"
 )
 
